@@ -1,0 +1,5 @@
+# keep these out of version control / shared zips
+drugreminder.db
+vapid_private.pem
+__pycache__/
+static/uploads/prescriptions/*

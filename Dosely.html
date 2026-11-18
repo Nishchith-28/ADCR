@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Open Dosely</title>
+<style>
+  :root {
+    --bg: #F2F7F6; --surface: #FFFFFF; --border: #DCE7E4;
+    --text: #172420; --muted: #5B6B67;
+    --primary: #0E7C72; --primary-dark: #0A5C55; --primary-tint: #E1F2EF;
+    --danger-tint: #FBF0DA; --danger-text: #8A5E0A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 20px; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px; line-height: 1.55;
+  }
+  .card {
+    width: 100%; max-width: 460px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px 28px; text-align: center;
+    box-shadow: 0 1px 2px rgba(15,45,40,.04), 0 8px 24px -12px rgba(15,45,40,.12);
+  }
+  .brand { display: inline-flex; align-items: center; gap: 8px; color: var(--primary-dark);
+           font-weight: 800; font-size: 1.3rem; margin-bottom: 20px; }
+  .brand svg { color: var(--primary); }
+  h1 { font-size: 1.35rem; margin: 0 0 6px; }
+  p { margin: 0 0 14px; color: var(--muted); }
+  .spinner {
+    width: 30px; height: 30px; margin: 4px auto 16px; border-radius: 50%;
+    border: 3px solid var(--primary-tint); border-top-color: var(--primary);
+    animation: spin .9s linear infinite;
+  }
+  .spinner.done { animation: none; border-color: var(--primary); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+  .help {
+    text-align: left; background: var(--danger-tint); color: var(--danger-text);
+    border-radius: 12px; padding: 14px 18px 4px; margin: 4px 0 16px; font-size: .94rem;
+  }
+  .help ol { margin: 0 0 10px; padding-left: 20px; }
+  .help li { margin-bottom: 8px; }
+  code { background: rgba(0,0,0,.06); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+
+  .btn {
+    display: inline-block; background: var(--primary); color: #fff; text-decoration: none; border: 0;
+    font: inherit; font-weight: 700; padding: 11px 22px; border-radius: 8px; cursor: pointer;
+  }
+  .btn:hover { background: var(--primary-dark); }
+  [hidden] { display: none !important; }
+
+  details { margin-top: 22px; text-align: left; font-size: .9rem; color: var(--muted); }
+  summary { cursor: pointer; text-align: center; }
+  .row { display: flex; gap: 8px; margin-top: 10px; }
+  input[type=text] {
+    flex: 1; min-width: 0; padding: 9px 11px; border: 1px solid var(--border);
+    border-radius: 8px; font: inherit; color: var(--text);
+  }
+  .row button {
+    padding: 9px 16px; border: 1px solid var(--border); background: #fff; border-radius: 8px;
+    font: inherit; font-weight: 700; color: var(--primary-dark); cursor: pointer;
+  }
+  .foot { margin: 18px 0 0; font-size: .8rem; color: #8CA09B; }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6"/>
+      <path d="M9 8h6M9 12h6M9 16h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    Dosely
+  </div>
+
+  <div id="spinner" class="spinner" aria-hidden="true"></div>
+  <h1 id="title">Opening Dosely…</h1>
+  <p id="message" aria-live="polite">Looking for your Dosely server.</p>
+
+  <div id="help" class="help" hidden>
+    <ol>
+      <li>Double-click <strong>Start Dosely.bat</strong> in the Dosely folder.<br>
+          (Or open a terminal in that folder and run <code>python app.py</code>.)</li>
+      <li>Keep this tab open. Dosely opens by itself the moment the server is ready.</li>
+    </ol>
+  </div>
+
+  <a id="openNow" class="btn" href="#" hidden>Open Dosely now</a>
+
+  <details>
+    <summary>Using a different address?</summary>
+    <div class="row">
+      <input id="addr" type="text" spellcheck="false" autocomplete="off" aria-label="Server address">
+      <button id="save" type="button">Save</button>
+    </div>
+  </details>
+
+  <p class="foot">Server address: <code id="where"></code></p>
+  <noscript><p>This page needs JavaScript. You can also open
+    <a href="http://127.0.0.1:5000/">http://127.0.0.1:5000/</a> directly.</p></noscript>
+</main>
+
+<script>
+(function () {
+  var DEFAULT_SERVER = "http://127.0.0.1:5000";   // where app.py serves Dosely
+  var STORE_KEY = "dosely_server";
+  var RETRY_MS = 2000;                             // how often to look for the server
+  var SHOW_HELP_AFTER = 2;                         // failed looks before showing the how-to
+
+  var spinner = document.getElementById("spinner");
+  var title = document.getElementById("title");
+  var message = document.getElementById("message");
+  var help = document.getElementById("help");
+  var openNow = document.getElementById("openNow");
+  var addr = document.getElementById("addr");
+  var where = document.getElementById("where");
+
+  var server = normalize(read());
+  var attempts = 0;
+  var run = 0;                                     // changes whenever the address changes
+
+  function read() {
+    try { return localStorage.getItem(STORE_KEY); } catch (e) { return null; }
+  }
+  function write(value) {
+    try { localStorage.setItem(STORE_KEY, value); } catch (e) { /* private mode: fine for this visit */ }
+  }
+  function normalize(raw) {
+    var s = String(raw || "").trim();
+    if (!s) return DEFAULT_SERVER;
+    if (!/^https?:\/\//i.test(s)) s = "http://" + s;
+    return s.replace(/\/+$/, "");
+  }
+
+  function showAddress() {
+    where.textContent = server;
+    addr.value = server;
+    openNow.href = server + "/";
+  }
+
+  // Is Dosely answering at this address? An image load works from a local file
+  // in every browser (a normal request would be blocked by cross-origin rules).
+  function probe(done) {
+    var img = new Image();
+    var finished = false;
+    var timer = setTimeout(function () { finish(false); }, 2500);
+    function finish(ok) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      img.onload = img.onerror = null;
+      done(ok);
+    }
+    img.onload = function () { finish(true); };
+    img.onerror = function () { finish(false); };
+    img.src = server + "/static/icons/icon-192.png?t=" + Date.now();
+  }
+
+  function check(myRun) {
+    probe(function (ok) {
+      if (myRun !== run) return;                   // the address was changed meanwhile
+      if (ok) {
+        spinner.className = "spinner done";
+        title.textContent = "Dosely is ready";
+        message.textContent = "Opening it now…";
+        help.hidden = true;
+        setTimeout(function () {
+          if (myRun === run) window.location.replace(server + "/");   // ignore if the address changed
+        }, 350);
+        return;
+      }
+      attempts += 1;
+      if (attempts >= SHOW_HELP_AFTER) {
+        title.textContent = "The Dosely server isn't running yet";
+        message.textContent = "Waiting for it to start…";
+        help.hidden = false;
+        openNow.hidden = false;
+      }
+      setTimeout(function () { check(myRun); }, RETRY_MS);
+    });
+  }
+
+  function start() {
+    run += 1;
+    attempts = 0;
+    spinner.className = "spinner";
+    title.textContent = "Opening Dosely…";
+    message.textContent = "Looking for your Dosely server.";
+    help.hidden = true;
+    openNow.hidden = true;
+    showAddress();
+    check(run);
+  }
+
+  document.getElementById("save").addEventListener("click", function () {
+    server = normalize(addr.value);
+    write(server);
+    start();
+  });
+  addr.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") document.getElementById("save").click();
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>
